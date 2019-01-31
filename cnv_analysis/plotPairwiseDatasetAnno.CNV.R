@@ -30,18 +30,18 @@ coi <- c("NCI-H1869", "HuP-T4", 'Ishikawa (Heraklio) 02 ER-') # Cell lines of in
 coi <- c("NCI-H1869", "HuP-T4", 'NCI-H23') # Cell lines of interest instead of concordance
 coi.col <- "red"  # Colour for points matched to cell lines of interest
 
-pdir <- '../data'
-global.curation.dir <- file.path(pdir, "ref");
+pdir <- '~/git/CellLineConcordance/cnv_analysis/'
+global.curation.dir <- file.path(pdir, "data");
 out.rdata <- 'merged_annotations.Rdata';
 
-cnv.matrix.dir <- file.path(pdir, "cnv");
+cnv.matrix.dir <- file.path(pdir, "data");
 cnv.matrix.file <- file.path(cnv.matrix.dir, "hscra1.weightedCorrDf.Rdata")
 load(cnv.matrix.file)
 hscr.a1.mat <- weighted.corr.df
 cnv.matrix.file <- file.path(cnv.matrix.dir, "hscra2.weightedCorrDf.Rdata")
 load(cnv.matrix.file)
 hscr.a2.mat <- weighted.corr.df
-global.wd <- "../results/cnv"
+global.wd <- "~/git/CellLineConcordance/cnv_analysis/results/cnv"
 dir.create(global.wd, recursive=TRUE)
 setwd(global.wd)
 
@@ -244,6 +244,7 @@ addAnnoLines <- function(anno.points, max.height=0.75, x.pos=1, dist.y=0.05, dir
 matchClAnno <- function(x, match_val, matrix.perc.match, fn.headers){
   match.values <- c()
 
+  print(as.character(x['GDSC.cellid']))
   cl.fn <- as.vector(x[fn.headers])
   cl.fn <- cl.fn[!is.na(cl.fn)]
   rm.fn <- ""
@@ -383,6 +384,9 @@ for(ds1 in ds.type){
         colnames(matrix.perc.match) <- gsub("$", ".CEL", colnames(matrix.perc.match))
         rownames(matrix.perc.match) <- gsub("$", ".CEL", rownames(matrix.perc.match))
         print(paste("Cnt: ", ds1, "-", ds2, ": ", mat.count, sep=""))
+        na.idx <- which(apply(matrix.perc.match, 1, function(x) all(is.na(x))))
+        matrix.perc.match <- matrix.perc.match[-na.idx, -na.idx]
+
         match.list <- apply(cell.line.anno, 1, function(x) matchClAnno(x, "match", matrix.perc.match, fn.headers))
         names(match.list) <- as.vector(cell.line.anno$unique.cellid)
         mismatch.list <- apply(cell.line.anno, 1, function(x) matchClAnno(x, "mismatch", matrix.perc.match, fn.headers))

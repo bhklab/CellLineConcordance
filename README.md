@@ -8,6 +8,8 @@
   * **vcfToAffyGT.R:** Takes a standard VCF and converts it ot he Affy6 standard format for comparison of any sample to the Affymetrix 6 standard used for this analysis
   * **plotPairwiseDatasetAnno.R:** Creates a density plot of matching (homonymous) and non-matching (heteronymous) cell line pairs based on genotype concordance.
   * **subHeatmapPlotter.snp.R:** Plots individual sub-heatmaps of cell line pairs.  For each cell line, it'll create a heatmap of concordance to all isogenic lines and separate them into "Match" and "Mismatch" based on their annotations. Also genereates Rdata structure containing lists of the Match and Mismatch categories, as well as the complete matrix of concordance.
+  * **snpOneVsAllFingerprinter.R:** Takes a single sample and compares it against a reference panel (Affy6 Datasets).
+
 =======
 ## cnv_analysis
 

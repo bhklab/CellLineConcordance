@@ -16,8 +16,8 @@ library(gtools)
 library(scales)
 library(reshape)
 library(ggplot2)
-source('/Users/rquevedo/git/cnv_fingerprint/v2.0/func/processAnnotations.R')
-load('/Users/rquevedo/git/cnv_fingerprint/v2.0/data/merged_annotations.Rdata')
+#source('~/git/CellLineConcordance/src/processAnnotations.R')
+source('/code/src/processAnnotations.R')
 
 data.type <- 'snp' # either cnv or snp
 low.match.threshold <- c("cnv"=0.6,
@@ -27,12 +27,14 @@ mismatch.col <- 'magenta'
 match.col <- 'brown'
 
 snp.matrix.dir <- '~/Onedrive/bhk_lab/data/snp_fingerprinting'
-snp.matrix.dir <- '/data/snp/'
 snp.matrix.file <- 'complete_snp_matrix.allSnps.R'
+snp.matrix.dir <- '/data/snp/'
+snp.matrix.file <- 'snpConc.Rdata'
 
 global.curation.dir <- '/data/ref/'
 out.rdata <- 'merged_annotations.Rdata'
 
+global.wd <- "/Users/rquevedo/git/snp_fingerprint/environments/"
 global.wd <- '/results/snp/'
 dir.create(global.wd, recursive = TRUE, showWarnings = FALSE)
 
@@ -200,7 +202,7 @@ for(ds1 in ds.type){
 
 
 
-        #pdf(paste(paste(gsub(".filename(.+)?", "", fn.headers, perl=TRUE), sep="", collapse="_"), ".annoplot.pdf", sep=""))
+        pdf(paste(paste(gsub(".filename(.+)?", "", fn.headers, perl=TRUE), sep="", collapse="_"), ".annoplot.pdf", sep=""))
         layout(matrix(c(rep(c(0,0,2,2,1,0), 9),
                         c(0,0,0,3,3,0)), ncol=6, byrow=TRUE))
         par(mar=c(0, 0, 4.1, 2.1))
@@ -210,7 +212,7 @@ for(ds1 in ds.type){
              xlab="", ylab="",
              yaxt='n', xaxt='n')
         lines((dens.mm$y * (max(dens.match$y) / max(dens.mm$y))),
-              dens.mm$x,, col=mismatch.col)
+              dens.mm$x, col=mismatch.col)
         # Add in coloured shades
         with(dens.match, polygon(x=dens.match$y,
                                  y= dens.match$x,
@@ -324,9 +326,9 @@ names(low.match.list) <- gsub("pfizer.y", "pfizer2", names(low.match.list))
 names(low.match.list) <- gsub("\\.[xy]", "", names(low.match.list))
 lapply(low.match.list, function(x) {colnames(x) <- names(low.match.list); return(x)})
 
-pdf("non-concordant-ccl.ccle.all.pdf")
-lapply(names(low.match.list), function(x) plotNoncorcodantCl(low.match.list[[x]], x, colnames(low.match.list[[x]])))
-dev.off()
+# pdf("non-concordant-ccl.ccle.all.pdf")
+# lapply(names(low.match.list), function(x) plotNoncorcodantCl(low.match.list[[x]], x, colnames(low.match.list[[x]])))
+# dev.off()
 
 
 
@@ -337,13 +339,6 @@ rownames(y.df)[which(!duplicated(rownames(y.df)))]  # Num of unique cell lines a
 
 #Save environment
 save(y.df, low.match.list, cell.line.anno, matrix.perc.match,
-     file="/Users/rquevedo/git/snp_fingerprint/environments/plotPairwiseSnp.v2.Rdata")
+     file=file.path(global.wd, "plotPairwiseSnp.v2.Rdata"))
 
-# DELETE FROM HERE DOWN: Used to get concordance and correlation values for cell lines
-x <- unlist(cell.line.anno[grep("^HUH-6-clone5$", cell.line.anno$unique.cellid), c("cgp.filename", "gdsc.filename.x")])
-x <- gsub("cel", "CEL", x)
-x <- x[!is.na(x)]
 
-hscr.a1.mat[x,x]
-hscr.a2.mat[x,x]
-t.matrix.perc.match[x,x]

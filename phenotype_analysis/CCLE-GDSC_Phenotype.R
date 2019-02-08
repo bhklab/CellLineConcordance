@@ -7,7 +7,7 @@ packages <- c("AnnotationDbi", "org.Hs.eg.db", "PharmacoGx", "scales")
 tmp <- suppressPackageStartupMessages(lapply(packages, require, character.only = TRUE))
 
 outdir <- '~/Desktop/bhk_lab/results/phenotypes/expr_plots'
-outdir <- file.path(outdir, "plots", "gcsi-ccle")
+outdir <- file.path(outdir, "plots")
 refdir <- '~/git/reference/l1000'
 abc.dir <- '~/git/ccl_phenotype/reference'
 src.dir <- '~/git/ccl_phenotype/src'
@@ -17,6 +17,7 @@ refdir <- '/data/ref'  #codeocean
 abc.dir <- '/data/pharmaco'  #codeocean
 src.dir <- '/code/src'  #codeocean
 
+cloi <- "REH"
 
 source(file.path(src.dir, "comparePhenotypes.R"))
 load(file.path(refdir, "l1000.Rdata"))
@@ -387,10 +388,7 @@ plotKs <- function(i, j, col.i='blue', col.j='green', col.D="red",
 #### MAIN: Obtain PharmacoGX Data ####
 #Download PSets
 availablePSets()
-CTRPv2 <- downloadPSet("CTRPv2")
-GDSC <- downloadPSet("GDSC")
-GDSC1000 <- downloadPSet("GDSC1000")
-#load("~/Desktop/bhk_lab/data/pharmacogx/GDSC.RData")
+GDSC <- downloadPSet("GDSC1000")
 CCLE <-downloadPSet("CCLE")
 
 #   Cell lines found in both GDSC and CCLE
@@ -406,8 +404,6 @@ commonClAuc <- intersectPSet(list('CCLE'=CCLE,
 #   Genes found in both GDSC and CCLE assay
 commonGenes <- intersect(fNames(GDSC, "rna"),
                          fNames(CCLE,"rna"))
-
-cloi <- "REH"
 
 #   List of cell lines of the same tissue type as CLOI
 tissueCls <- intersect(cellNames(commonClAuc[[1]]),
@@ -452,6 +448,7 @@ drug.auc.list[['CCLE']] <- getDrugVals(commonClAuc, 'CCLE')
 drug.auc.list[['GDSC.tissue']] <- getDrugVals(commonTissueCl, 'GDSC')
 drug.auc.list[['CCLE.tissue']] <- getDrugVals(commonTissueCl, 'CCLE')
 
+#### Expression correlation matrices ####
 # Pearson correlation of L1000 genes
 Y.l1000 <- cor(as.matrix(expr.sub.list[['GDSC']]), 
                as.matrix(expr.sub.list[['CCLE']]), 
@@ -476,6 +473,7 @@ Y <- cor(as.matrix(exprs(expr.list[['GDSC.tissue']])),
          use = "pairwise.complete.obs", method = "pearson")
 summ.expr.tissue  <- summMatchMatrix(Y, TRUE, 'list')
 
+#### Drug sensitivity matrices ####
 load(file.path(abc.dir, "abc.gdsc-ccle.Rdata"))
 
 #abc.matrices[sapply(abc.matrices, class) == 'try-error'] <- NULL
@@ -488,28 +486,7 @@ paclitaxel <- computeDeltaABC(drug.auc.list, dsA='GDSC', dsB='CCLE',  ABC=abc.ma
 S.dABC.all[['paclitaxel']] <- paclitaxel
 
 
-## Computes the "Match" and "Mismatch" deltaAACs for all cell lines
-dAAC.all <- computeDeltaAAC(drug.auc.list, dsA='GDSC', dsB='CCLE', filter=FALSE)
-
-## Computes the "Match" and "Mismatch" deltaAACs for all tissue-specific cell lines
-dAAC.tissues <- computeDeltaAAC(drug.auc.list, dsA='GDSC.tissue', dsB='CCLE.tissue', filter=FALSE)
-
-## Computes the "Match" and "Mismatch" deltaAACs for all cell lines
-S.dAAC.all <- computeDeltaAAC(drug.auc.list, dsA='GDSC', dsB='CCLE', 
-                              filter=TRUE, S.thr=0.2, Rtype='both')
-paclitaxel <- computeDeltaAAC(drug.auc.list, dsA='GDSC', dsB='CCLE', 
-                              filter=TRUE, S.thr =0.4, Rtype='both')[['paclitaxel']]
-S.dAAC.all[['paclitaxel']] <- paclitaxel
-
-
-## Computes the "Match" and "Mismatch" deltaAACs for all tissue-specific cell lines
-S.dAAC.tissues <- computeDeltaAAC(drug.auc.list, dsA='GDSC.tissue', dsB='CCLE.tissue', 
-                                  filter=TRUE, S.thr =0.2, Rtype='both')
-paclitaxel <- computeDeltaAAC(drug.auc.list, dsA='GDSC.tissue', dsB='CCLE.tissue', 
-                              filter=TRUE, S.thr =0.4, Rtype='both')[['paclitaxel']]
-S.dAAC.tissues[['paclitaxel']] <- paclitaxel
-
-### Plotting of Likelihood Ratio
+#### Visualization: CDFs for Expression ####
 out.id <- 'paper'
 
 switch(out.id,
@@ -530,31 +507,8 @@ switch(out.id,
          ids.x <- c("NUGC-3", "SW620", "KARPAS-620")
        })
 
-summary(summ.expr.l1000[['Matching']])
-summary(summ.expr.l1000[['Nonmatching']])
 
-values.x <- getXVals(summ.expr.l1000[[1]], ids.x)
-boxplot(summ.expr.l1000, ylim=c(0,1),
-       ylab="PCC", las=1, main="L1000 Gene Expression")
-plotBayesFactor(summ.expr.l1000[[1]], summ.expr.l1000[[2]],
-                values.x = values.x,
-                xlab='Delta AAC', main="L1000 Gene expression")
-
-summary(summ.expr[['Matching']])
-summary(summ.expr[['Nonmatching']])
-
-values.x <- getXVals(summ.expr[[1]], ids.x)
-print("z-score of correlations:")
-z <- (values.x - mean(summ.expr[['Matching']], na.rm=TRUE)) / sd(summ.expr[['Matching']], na.rm=TRUE)
-round(z, 3)
-
-values.x <- getXVals(summ.expr[[1]], ids.x)
-boxplot(summ.expr)
-plotBayesFactor(summ.expr[[1]], summ.expr[[2]],
-                values.x = values.x,
-                xlab='Correlation', main="Gene expression")
-
-pdf(file.path("plots", "ks_l1000Expr.pdf"), height=3, width=15)
+pdf(file.path(outdir, "ks_l1000Expr.pdf"), height=3, width=15)
 close.screen(all.screens=TRUE)
 split.screen(c(1,length(S.dABC.all)))
 I <- summ.expr[['Matching']]
@@ -576,22 +530,18 @@ axis(side=1, at = c(0,1), labels = c("0", "1"))
 
 dev.off()
 
-## ABC
-sapply(names(dABC.all), function(drug.id){
-    suppressWarnings(ks.test(dABC.all[[drug.id]][['Matching']], 
-                             dABC.all[[drug.id]][['Nonmatching']])$p.val)
-})
+#### Visualization: CDFs for Drug sensitivity ABC ####
+print("KS Test for Matching/Nonmatching drug ABC curves")
+print(sapply(names(dABC.all), function(drug.id){
+    round(suppressWarnings(
+      ks.test(dABC.all[[drug.id]][['Matching']], 
+              dABC.all[[drug.id]][['Nonmatching']])$p.val), 5)
+}))
 
 
-drug.id = names(dABC.all)[grep("paclitaxel", names(dABC.all))]
-values.x <- getXVals(dABC.all[[drug.id]][[1]], ids.x)
 
-boxplot(dABC.all[[drug.id]])
-plotBayesFactor(dABC.all[[drug.id]][[1]], dABC.all[[drug.id]][[2]],
-              values.x = values.x,
-              xlab='Delta AAC', main=drug.id)
-
-pdf(file.path("plots", "ks_drugABC.pdf"), height=3, width=15)
+## Resistant removed ABCs
+pdf(file.path(outdir, "ks_drugABC.pdf"), height=3, width=15)
 close.screen(all.screens=TRUE)
 split.screen(c(1,length(S.dABC.all)))
 kspval <- sapply(names(S.dABC.all), function(drug.id, plot.ks){
@@ -625,11 +575,11 @@ kspval <- sapply(names(S.dABC.all), function(drug.id, plot.ks){
 }, plot.ks=TRUE)
 dev.off()
 
-kspval
 
 meanM <- t(kspval[c(1,3),])
 colnames(meanM) <- c("Matching", "Non-matching")
 
+pdf(file.path(outdir, "avg_deltaABC.pdf"))
 box.points <- boxplot(meanM, las=1,
                       ylab="Average Delta ABC",
                       ylim=c(0, 0.5), main="Resistant-removed Delta ABC")
@@ -637,14 +587,13 @@ points(rep(1, nrow(meanM)), meanM[,1], col="black", pch=16)
 text(rep(1.1, nrow(meanM)), meanM[,1], labels=rownames(meanM), adj = 0, cex=0.7)
 points(rep(2, nrow(meanM)), meanM[,2], col="black", pch=16)
 text(rep(2.1, nrow(meanM)), meanM[,2], labels=rownames(meanM), adj = 0, cex=0.7)
+dev.off()
 
-apply(kspval, 1, mean)
+
 
 plot.pdf <- TRUE
-#drug.id = names(S.dABC.all)[grep("paclitaxel", names(S.dABC.all))]
-#drug.id <- '17-AAG'
 
-if(plot.pdf) pdf(file.path("plots", "density_abc.reh-nci.pdf"), height=5, width=5)
+if(plot.pdf) pdf(file.path(outdir, "density_abc.reh-nci.pdf"), height=5, width=5)
 lr.abc <- sapply(names(S.dABC.all), function(drug.id){
     values.x <- getXVals(S.dABC.all[[drug.id]][[1]], ids.x)
 
@@ -657,91 +606,4 @@ lr.abc.df <- do.call("rbind", lr.abc['bf',])
 rownames(lr.abc.df) <- colnames(lr.abc)
 lr.abc.df
 if(plot.pdf) dev.off()
-
-
-sapply(names(dAAC.all), function(drug.id){
-    suppressWarnings(ks.test(dAAC.all[[drug.id]][['Matching']], 
-                             dAAC.all[[drug.id]][['Nonmatching']])$p.val)
-})
-
-
-drug.id = names(dAAC.all)[grep("paclitaxel", names(dAAC.all))]
-values.x <- getXVals(dAAC.all[[drug.id]][[1]], ids.x)
-
-boxplot(dAAC.all[[drug.id]])
-plotBayesFactor(dAAC.all[[drug.id]][[1]], dAAC.all[[drug.id]][[2]],
-              values.x = values.x,
-              xlab='Delta AAC', main=drug.id)
-
-kspval <- sapply(names(S.dAAC.all), function(drug.id){
-    I <- S.dAAC.all[[drug.id]][['Matching']]
-    J <- S.dAAC.all[[drug.id]][['Nonmatching']]
-    pval <- suppressWarnings(ks.test(I, J)$p.val)
-    return(c("meanM"=mean(I, na.rm=TRUE),
-            "sdM"=sd(I, na.rm=TRUE),
-            "meanNM"=mean(J, na.rm=TRUE),
-            "sdNM"=sd(J, na.rm=TRUE),
-            "pval"=pval))
-
-})
-kspval
-
-meanM <- t(kspval[c(1,3),])
-colnames(meanM) <- c("Matching", "Non-matching")
-
-box.points <- boxplot(meanM, las=1,
-                      ylab="Average Delta AAC",
-                      ylim=c(0, 0.5), main="Resistant-removed Delta AAC")
-points(rep(1, nrow(meanM)), meanM[,1], col="black", pch=16)
-text(rep(1.1, nrow(meanM)), meanM[,1], labels=rownames(meanM), adj = 0, cex=0.7)
-points(rep(2, nrow(meanM)), meanM[,2], col="black", pch=16)
-text(rep(2.1, nrow(meanM)), meanM[,2], labels=rownames(meanM), adj = 0, cex=0.7)
-
-apply(kspval, 1, mean)
-
-drug.id = names(S.dAAC.all)[grep("paclitaxel", names(S.dAAC.all))]
-drug.id <- '17-AAG'
-sapply(names(S.dAAC.all), function(drug.id){
-    values.x <- getXVals(S.dAAC.all[[drug.id]][[1]], ids.x)
-
-    boxplot(S.dAAC.all[[drug.id]])
-    plotBayesFactor(S.dAAC.all[[drug.id]][[1]], S.dAAC.all[[drug.id]][[2]],
-                  values.x = values.x,
-                  xlab='Delta AAC', main=drug.id)
-})
-
-
-print("CCLE")
-drug.auc.list[['CCLE']][c('PD-0332991', "paclitaxel"), 
-                        c('NCI-H23', "REH"), drop=FALSE]
-
-print("GDSC")
-drug.auc.list[['GDSC']][c('PD-0332991', "paclitaxel"), 
-                        c('NCI-H23', "REH"), drop=FALSE]
-
-getGeneExpr <- function(matx, gene, cellid){
-    require(org.Hs.eg.db)
-    hugo.ids <- mapIds(org.Hs.eg.db,
-                       keys=gsub("_.*", "", rownames(matx)),
-                       column="SYMBOL",
-                       keytype="ENSEMBL",
-                       multiVals="first")
-    #hugo.ids <- do.call("rbind", hugo.ids)
-    hugo.ids <- data.frame(hugo.ids)
-    
-    hugo.ids[match(gene, hugo.ids[,1]),,drop=FALSE]
-    genex <- matx[match(gene, hugo.ids[,1]), cellid,drop=FALSE]
-    rownames(genex) <- hugo.ids[match(gene, hugo.ids[,1]),]
-    genex
-}
-
-gene <- c('MYC', 'FAT1', 'IRF2')
-cellid <- c('REH', 'NCI-H23')
-gdsc.expr <- getGeneExpr(exprs(expr.list[['GDSC']]), gene, cellid)
-ccle.expr <- getGeneExpr(exprs(expr.list[['CCLE']]), gene, cellid)
-cbind(gdsc.expr, ccle.expr)
-
-(gdsc.expr - mean(exprs(expr.list[['GDSC']])[,cellid])) / sd(exprs(expr.list[['GDSC']])[,cellid])
-(ccle.expr - mean(exprs(expr.list[['CCLE']])[,cellid])) / sd(exprs(expr.list[['CCLE']])[,cellid])
-
 

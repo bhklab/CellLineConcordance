@@ -1,12 +1,9 @@
-
-packages <- c("AnnotationDbi", "org.Hs.eg.db", "plyr",
-             "vioplot", "PharmacoGx", "scales", "gtools",
-             "intervals", "preprocessCore", "Hmisc", 
-             "ggplot2", "vioplot")
+#### SETUP ####
 packages <- c("AnnotationDbi", "org.Hs.eg.db", "PharmacoGx", "scales")
 tmp <- suppressPackageStartupMessages(lapply(packages, require, character.only = TRUE))
 
 outdir <- '~/Desktop/bhk_lab/results/phenotypes/expr_plots'
+outdir <- file.path(outdir, "plots", "gcsi-ccle")
 refdir <- '~/git/reference/l1000'
 abc.dir <- '~/git/ccl_phenotype/reference'
 
@@ -16,8 +13,7 @@ abc.dir <- '/data/pharmaco'  #codeocean
 
 load(file.path(refdir, "l1000.Rdata"))
 
-####################
-## FUNCTIONS
+#### FUNCTIONS ####
 
 getTissueCommonCl <- function(ds1, ds2, targ.cl){
   getTissue <- function(targ.cl, ds){
@@ -381,9 +377,7 @@ plotKs <- function(i, j, col.i='blue', col.j='green', col.D="red",
 }
 
 
-####################
-## MAIN
-#### Obtain all PharmacoGX Data
+#### MAIN: Obtain PharmacoGX Data ####
 #Download PSets
 availablePSets()
 gCSI <- downloadPSet("gCSI")
@@ -448,9 +442,10 @@ Y <- cor(as.matrix(exprs(expr.list[['gCSI']])),
          use = "pairwise.complete.obs", method = "pearson")
 summ.expr <- summMatchMatrix(Y, TRUE, 'list')
 
+
+#### Preprocess drug sensitivity data ####
 load(file.path(abc.dir, "abc.gcsi-ccle.Rdata"))
 
-#abc.matrices[sapply(abc.matrices, class) == 'try-error'] <- NULL
 dABC.all <- computeDeltaABC(drug.auc.list, dsA='gCSI', dsB='CCLE', ABC=abc.matrices,
                             filter=FALSE)
 S.dABC.all <- computeDeltaABC(drug.auc.list, dsA='gCSI', dsB='CCLE', ABC=abc.matrices,
@@ -459,173 +454,11 @@ paclitaxel <- computeDeltaABC(drug.auc.list, dsA='gCSI', dsB='CCLE',  ABC=abc.ma
                               filter=TRUE, S.thr =0.4, Rtype='both')[['paclitaxel']]
 S.dABC.all[['paclitaxel']] <- paclitaxel
 
-## Computes the "Match" and "Mismatch" deltaAACs for all cell lines
-dAAC.all <- computeDeltaAAC(drug.auc.list, dsA='gCSI', dsB='CCLE', filter=FALSE)
 
-## Computes the "Match" and "Mismatch" deltaAACs for all tissue-specific cell lines
-dAAC.tissues <- computeDeltaAAC(drug.auc.list, dsA='gCSI.tissue', dsB='CCLE.tissue', filter=FALSE)
-
-# All drug recomputed delta-AAC
-Y.drug.aac <- lapply(seq_along(rownames(drug.auc.list[['gCSI.tissue']])), function(each.row){
-  Y.tmp <- apply(drug.auc.list[['CCLE.tissue']][each.row, ,drop=FALSE], 2, function(each.col){
-    abs(each.col - drug.auc.list[['gCSI.tissue']][each.row, ])
-  })
-  rownames(Y.tmp) <- colnames(drug.auc.list[['gCSI.tissue']])
-  colnames(Y.tmp) <- colnames(drug.auc.list[['CCLE.tissue']])
-  Y.tmp
-})
-names(Y.drug.aac) <- rownames(drug.auc.list[['gCSI.tissue']])
-summ.aac <- lapply(Y.drug.aac, summMatchMatrix, mat.to.vector=TRUE, return.style='list')
-
-## summ.aac is equal to dAAC.tissues
-
-## Computes the "Match" and "Mismatch" deltaAACs for all cell lines
-S.dAAC.all <- computeDeltaAAC(drug.auc.list, dsA='gCSI', dsB='CCLE', 
-                              filter=TRUE, S.thr =0.2, Rtype='both')
-paclitaxel <- computeDeltaAAC(drug.auc.list, dsA='gCSI', dsB='CCLE', 
-                              filter=TRUE, S.thr =0.4, Rtype='both')[['paclitaxel']]
-S.dAAC.all[['paclitaxel']] <- paclitaxel
-
-
-## Computes the "Match" and "Mismatch" deltaAACs for all tissue-specific cell lines
-S.dAAC.tissues <- computeDeltaAAC(drug.auc.list, dsA='gCSI.tissue', dsB='CCLE.tissue', 
-                                  filter=TRUE, S.thr =0.2, Rtype='both')
-paclitaxel <- computeDeltaAAC(drug.auc.list, dsA='gCSI.tissue', dsB='CCLE.tissue', 
-                              filter=TRUE, S.thr =0.4, Rtype='both')[['paclitaxel']]
-S.dAAC.tissues[['paclitaxel']] <- paclitaxel
-  
-if(0){
-   # All-by-all comparison for delta-AUC between gCSI and CCLE
-    Ylist.tmp <- apply(drug.auc.list[['CCLE']][each.row, ,drop=FALSE], 2, function(each.col){
-      col.i.R <- each.col < S.thr
-      deltaAUC <- abs(each.col - drug.auc.list[['gCSI']][each.row, ])
-      
-      list("dAUC"=deltaAUC,
-          "col.i.R"=col.i.R
-          )
-    })
-    # Creates a 1xd matrix for gCSI drugs and dx1 matrix for CCLE drugs less than Sensitivity threshold
-    row.R <- drug.auc.list[['gCSI.tissue']][each.row, ,drop=FALSE] < S.thr
-    col.R <- sapply(Ylist.tmp, function(x) x[['col.i.R']])
-  
-    # Assemble the matrix of deltaAUCs
-    Y.tmp <- sapply(Ylist.tmp, function(x) x[['dAUC']])
-    rownames(Y.tmp) <- colnames(drug.auc.list[['gCSI']])
-    colnames(Y.tmp) <- colnames(drug.auc.list[['CCLE']])
-  
-  # Creates a matrix of resistant lines
-  # Remove resistant     if BOTH (2/2) are resistant
-  R.mat <- (t(row.R) %*% col.R)
-  if(Rtype=='single'){
-    # Remove resistant   if at least 1 of the 2 is resistant 
-    R.mat[] <- 0L
-    R.mat.single <- sweep(sweep(R.mat, 2, col.R, "+"), 1, t(row.R), "+") >= 1
-  }
-  
-  pac <- data.frame("CCLE"=drug.auc.list[['CCLE']][each.row, ,drop=TRUE],
-                    "gCSI"=drug.auc.list[['gCSI']][each.row, ,drop=TRUE])
-  plot(pac,  col=alpha("black", 1), pch=16)
-  
-  
-  CCLE.drug=drug.auc.list[['CCLE']][each.row, ,drop=TRUE]
-  gCSI.drug=drug.auc.list[['gCSI']][each.row, ,drop=TRUE]
-  for(i in c(1:10)){
-      ridx <- sample(c(1:length(CCLE.drug)), size = length(CCLE.drug), replace = FALSE)
-      ridx2 <- sample(c(1:length(gCSI.drug)), size = length(gCSI.drug), replace = FALSE)
-      pac <- data.frame("CCLE"=CCLE.drug[ridx],
-                        "gCSI"=gCSI.drug[ridx2])
-      points(pac, col=alpha("blue", 0.1), pch=16)
-  }
-  
-  ##  All drug recomputed delta-AAC with resistant lines removed
-  # 
-  Y.drug.aac.Sonly <- lapply(seq_along(rownames(drug.auc.list[['gCSI']])), 
-                             function(each.row, S.thr, Rtype){
-    # All-by-all comparison for delta-AUC between gCSI and CCLE
-    Ylist.tmp <- apply(drug.auc.list[['CCLE']][each.row, ,drop=FALSE], 2, function(each.col){
-      col.i.R <- each.col < S.thr
-      deltaAUC <- abs(each.col - drug.auc.list[['gCSI']][each.row, ])
-      
-      list("dAUC"=deltaAUC,
-          "col.i.R"=col.i.R
-          )
-    })
-    # Creates a 1xd matrix for gCSI drugs and dx1 matrix for CCLE drugs less than Sensitivity threshold
-    row.R <- drug.auc.list[['gCSI.tissue']][each.row, ,drop=FALSE] < S.thr
-    col.R <- sapply(Ylist.tmp, function(x) x[['col.i.R']])
-  
-    # Assemble the matrix of deltaAUCs
-    Y.tmp <- sapply(Ylist.tmp, function(x) x[['dAUC']])
-    rownames(Y.tmp) <- colnames(drug.auc.list[['gCSI']])
-    colnames(Y.tmp) <- colnames(drug.auc.list[['CCLE']])
-  
-    # Creates a matrix of resistant lines
-    # Remove resistant     if BOTH (2/2) are resistant
-    R.mat <- t(row.R) %*% t(as.matrix(col.R)) # row.R  (n x 1) %*% col.R (1 x n)
-    if(Rtype=='single'){
-      # Remove resistant   if at least 1 of the 2 is resistant 
-      R.mat[] <- 0L
-      R.mat.single <- sweep(sweep(R.mat, 2, col.R, "+"), 1, t(row.R), "+") >= 1
-      R.mat <- R.mat.single      
-    }  
-    mode(R.mat) <- "logical"
-  
-    # For all the Resistant lines (single or both), set that deltaAUC to NA
-    diagY <- diag(Y.tmp)
-    Y.tmp[R.mat] <- NA
-    diag(Y.tmp) <- diagY
-    Y.tmp
-  }, S.thr = 0.4, Rtype = 'single')
-  names(Y.drug.aac.Sonly) <- rownames(drug.auc.list[['gCSI']])
-  summ.aac.Sonly <- lapply(Y.drug.aac.Sonly, summMatchMatrix, mat.to.vector=TRUE, return.style='list')
-  
-  require(rowr)
-  require(reshape)
-  datx <- summ.aac.Sonly[['paclitaxel']]
-  dat <- cbind.fill(datx[[1]], datx[[2]])
-  colnames(dat) <- c("Matching", "Nonmatching")
-  
-  mdat <- melt(dat)
-  
-  ggplot(mdat,aes(x=variable,y=value)) +
-    geom_violin() +
-    geom_text(aes(y=max(value,na.rm=TRUE)/2,label='test'))
-}
-  
-  
-### Plotting of Likelihood Ratio
-out.id <- 'cnvDisc'
-
-switch(out.id,
-       tissue={
-         ids.x <- 'PSN1'
-       },
-       cnvDisc={
-         ids.x <- c("SR", "PSN1", "NCI-H2052")
-         #ids.x <- c("PSN1")
-       },
-       cnvAmbig={
-         ids.x <- c("MOLP-8", "NALM-6", "KYSE-510")
-       },
-       cnvMatch={
-         ids.x <- c("NUGC-3", "SW620", "KARPAS-620")
-       })
-
-values.x <- getXVals(summ.expr[[1]], ids.x)
-boxplot(summ.expr)
-plotBayesFactor(summ.expr[[1]], summ.expr[[2]],
-                values.x = values.x,
-                xlab='Delta AAC', main="All Gene expression")
-
-values.x <- getXVals(summ.expr.l1000[[1]], ids.x)
-boxplot(summ.expr.l1000)
-plotBayesFactor(summ.expr.l1000[[1]], summ.expr.l1000[[2]],
-                values.x = values.x,
-                xlab='Correlation', main="L1000 Gene expression")
-
+#### Drug ABC: All Drugs ####
 plot.ks <- TRUE
 
-pdf(file.path("plots", "gcsi-ccle", "ks_drugABC.pdf"), height=3, width=10)
+pdf(file.path(outdir, "ks_drugABC.pdf"), height=3, width=10)
 close.screen(all.screens=TRUE)
 split.screen(c(1,length(dABC.all)))
 kspval <- sapply(names(dABC.all), function(drug.id, plot.ks){
@@ -659,11 +492,10 @@ kspval <- sapply(names(dABC.all), function(drug.id, plot.ks){
 }, plot.ks=TRUE)
 dev.off()
 
-round(kspval, 5)
-
+#### Drug ABC: sensitive only ####
 plot.ks <- TRUE
 
-pdf(file.path("plots", "gcsi-ccle", "ks_drugABC-sensitive.pdf"), height=3, width=10)
+pdf(file.path(outdir, "ks_drugABC-sensitive.pdf"), height=3, width=10)
 close.screen(all.screens=TRUE)
 split.screen(c(1,length(S.dABC.all)))
 kspval <- sapply(names(S.dABC.all), function(drug.id, plot.ks){
@@ -697,10 +529,9 @@ kspval <- sapply(names(S.dABC.all), function(drug.id, plot.ks){
 }, plot.ks=TRUE)
 dev.off()
 
-kspval
 
+#### Drug ABC: Modified Fig. 7 ####
 ## Calculates the Log2-Likelihood ratios for Nonmatching/Matching density distributions
-
 ids.l <- list("D"=rev(c("SR", "PSN1", "NCI-H2052")),
               "A"=rev(c("MOLP-8", "NALM-6", "KYSE-510")),
               "C"=rev(c("NUGC-3", "SW620", "KARPAS-620")))
@@ -725,7 +556,7 @@ print(paste0(mean(ks.pval), "+/-", sd(ks.pval)))
 ramp.cols=list("1" = "red", "-1" = "black")
 
 ## KDE plots
-pdf(file.path("plots", "gcsi-ccle", "kde_plots.pdf"), width=30)
+pdf(file.path(outdir, "kde_plots.pdf"), width=30)
 split.screen(c(1, (length(S.dABC.all) + 1)))
 for(drug.id in c("EXPR", names(S.dABC.all))){
     # KDE plots only
@@ -769,7 +600,7 @@ plotBF <- function(ids.x, drug.id, scale=1.4, ramp.cols=list("1" = "black", "-1"
 }
 
 ## CNV Discordant Plots
-pdf(file.path("plots", "gcsi-ccle", "dotplots_1.pdf"), width=30, height =4.5)
+pdf(file.path(outdir, "dotplots_1.pdf"), width=30, height =4.5)
 split.screen(c(1, (length(S.dABC.all) + 1)))
 ids.x <- rev(c("SR", "PSN1", "NCI-H2052"))
 
@@ -788,7 +619,7 @@ dev.off()
 
 
 ## CNV Ambiguous Plots
-pdf(file.path("plots", "gcsi-ccle", "dotplots_2.pdf"), width=30, height =4.5)
+pdf(file.path(outdir, "dotplots_2.pdf"), width=30, height =4.5)
 split.screen(c(1, (length(S.dABC.all) + 1)))
 ids.x <- rev(c("MOLP-8", "NALM-6", "KYSE-510"))
 
@@ -808,7 +639,7 @@ close.screen(all.screens=TRUE)
 dev.off()
 
 ## CNV Concordant Plots
-pdf(file.path("plots", "gcsi-ccle", "dotplots_3.pdf"), width=30, height =4.5)
+pdf(file.path(outdir, "dotplots_3.pdf"), width=30, height =4.5)
 split.screen(c(1, (length(S.dABC.all) + 1)))
 ids.x <- rev(c("NUGC-3", "SW620", "KARPAS-620"))
 
@@ -829,7 +660,7 @@ dev.off()
 
 
 ## Dotplot legend
-pdf(file.path("plots", "gcsi-ccle", "dotplots_legend.pdf"), width=30, height =4.5)
+pdf(file.path(outdir, "dotplots_legend.pdf"), width=30, height =4.5)
 split.screen(c(1, (length(S.dABC.all) + 1)))
 screen(1)
 plot(0, type='n', xlim=c(1, 6), ylim=c(0,2), axes=FALSE, ylab="", xlab="")
@@ -838,205 +669,4 @@ points(x = seq(1, 5), y=rep(1, 5), pch=16,
 axis(side = 1, at=c(2:5), labels = c("<=2", 3,4, ">=5"))
 close.screen(all.screens=TRUE)
 dev.off()
-
-
-## Some summary metrics
-kspval <- sapply(names(dAAC.all), function(drug.id){
-    I <- dAAC.all[[drug.id]][['Matching']]
-    J <- dAAC.all[[drug.id]][['Nonmatching']]
-    pval <- suppressWarnings(ks.test(I, J)$p.val)
-    return(c("meanM"=mean(I, na.rm=TRUE),
-            "sdM"=sd(I, na.rm=TRUE),
-            "meanNM"=mean(J, na.rm=TRUE),
-            "sdNM"=sd(J, na.rm=TRUE),
-            "pval"=pval))
-
-})
-round(kspval, 5)
-
-apply(kspval, 1, mean)
-
-ids.x <- "PSN1"
-
-drug.id = names(Y.drug.aac)[4]
-
-sapply(names(S.dAAC.all), function(drug.id){
-    values.x <- getXVals(dAAC.all[[drug.id]][[1]], ids.x)
-    #boxplot(dAAC.all[[drug.id]])
-    plotBayesFactor(dAAC.all[[drug.id]][[1]], dAAC.all[[drug.id]][[2]],
-                  values.x = values.x, dot.plot=TRUE,
-                  xlab='Delta AAC', main=drug.id)
-})
-
-kspval <- sapply(names(S.dAAC.all), function(drug.id){
-    I <- S.dAAC.all[[drug.id]][['Matching']]
-    J <- S.dAAC.all[[drug.id]][['Nonmatching']]
-    pval <- suppressWarnings(ks.test(I, J)$p.val)
-    return(c("meanM"=mean(I, na.rm=TRUE),
-            "sdM"=sd(I, na.rm=TRUE),
-            "meanNM"=mean(J, na.rm=TRUE),
-            "sdNM"=sd(J, na.rm=TRUE),
-            "pval"=pval))
-
-})
-round(kspval, 5)
-
-apply(kspval, 1, mean)
-
-values.x <- getXVals(S.dAAC.all[['Erlotinib']][[1]], 'NUGC-3')
-
-#boxplot(S.dAAC.all[[drug.id]])
-plotBayesFactor(S.dAAC.all[['Erlotinib']][[1]], S.dAAC.all[['Erlotinib']][[2]],
-              values.x = values.x, dot.plot=TRUE,
-              xlab='Delta AAC', main='Erlotinib',
-              f1col='black', f2col='red',
-              lty=2, alpha.val=1)
-
-ids.x <- c("KYSE-510", "PSN1", "NUGC-3")
-sapply(names(S.dAAC.all), function(drug.id){
-    values.x <- getXVals(S.dAAC.all[[drug.id]][[1]], ids.x)
-
-    #boxplot(S.dAAC.all[[drug.id]])
-    plotBayesFactor(S.dAAC.all[[drug.id]][[1]], S.dAAC.all[[drug.id]][[2]],
-                  values.x = values.x, dot.plot=TRUE,
-                  xlab='Delta AAC', main=drug.id,
-                  f1col='black', f2col='red',
-                  lty=2, alpha.val=1)
-})
-
-ks.summ <- summKSstat(summ.aac, Y.drug.aac)
-ks.summ <- sapply(ks.summ, function(x) c("mean"=mean(x), "sd"=sd(x)))
-ks.summ
-
-print("CCLE")
-drug.auc.list[['CCLE']][c('PD-0325901', "paclitaxel"), 
-                        c('PSN1', "NCI-H2052"), drop=FALSE]
-
-print("gCSI")
-drug.auc.list[['gCSI']][c('PD-0325901', "paclitaxel"), 
-                        c('PSN1', "NCI-H2052"), drop=FALSE]
-
-## Calculates the Log2-Likelihood ratios for Nonmatching/Matching density distributions
-
-ids.l <- list("D"=rev(c("SR", "PSN1", "NCI-H2052")),
-              "A"=rev(c("MOLP-8", "NALM-6", "KYSE-510")),
-              "C"=rev(c("NUGC-3", "SW620", "KARPAS-620")))
-expr.mat <- sapply(ids.l, function(ids.x){
-    values.x <- getXVals(summ.expr.l1000[[1]], ids.x)
-    
-    plotBayesFactor(summ.expr.l1000[[1]], summ.expr.l1000[[2]],
-                values.x = values.x, 
-                kde.plot=FALSE, dot.plot=FALSE)$bf
-})
-expr.mat <- rbind(expr.mat, apply(expr.mat, 2, mean))
-expr.mat <- rbind(expr.mat, apply(expr.mat, 2, sd))
-rownames(expr.mat) <- c("CL_A", "CL_B", "CL_C", "Mean", "SD")
-round(expr.mat ,2)
-
-ks.pval <- sapply(names(S.dAAC.all), function(drug.id){
-    plotBayesFactor(S.dAAC.all[[drug.id]][[1]], S.dAAC.all[[drug.id]][[2]],
-                  values.x = c(), dot.plot=FALSE, kde.plot=FALSE)$ks
-})
-print(paste0(mean(ks.pval), "+/-", sd(ks.pval)))
-
-## KDE plots
-dir.create("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/")
-pdf("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/kde_plots.pdf", width=30)
-split.screen(c(1, (length(S.dAAC.all) + 1)))
-for(drug.id in c("EXPR", names(S.dAAC.all))){
-    # KDE plots only
-    screen(grep(drug.id, c("EXPR", names(S.dAAC.all))))
-    
-    if(drug.id == 'EXPR'){
-            plotBayesFactor(summ.expr.l1000[[1]], summ.expr.l1000[[2]],
-                  values.x = c(), dot.plot=FALSE,
-                  xlab='Delta AAC', main=drug.id,
-                  f1col='black', f2col='red',
-                  lty=5, alpha.val=1)
-    } else {
-            plotBayesFactor(S.dAAC.all[[drug.id]][[1]], S.dAAC.all[[drug.id]][[2]],
-                  values.x = c(), dot.plot=FALSE,
-                  xlab='Delta AAC', main=drug.id,
-                  f1col='black', f2col='red',
-                  lty=5, alpha.val=1)
-    }
-}
-close.screen(all.screens=TRUE)
-dev.off()
-
-## Mini Function to plot based on drug id and values
-plotBF <- function(ids.x, drug.id, scale=1.4){
-    if(drug.id == 'EXPR'){
-        match.ds <- summ.expr.l1000[[1]]
-        mismatch.ds <- summ.expr.l1000[[2]]
-    } else {
-        match.ds <- S.dAAC.all[[drug.id]][[1]]
-        mismatch.ds <- S.dAAC.all[[drug.id]][[2]]
-    }
-    values.x <- getXVals(match.ds, ids.x)
-       
-    plotBayesFactor(match.ds, mismatch.ds,
-                  values.x = values.x, dot.plot=TRUE,
-                  kde.plot=FALSE, annotate.plot=FALSE,
-                  xlab='Delta AAC', main=drug.id,
-                  f1col='black', f2col='red',
-                  cex.range=c(2, 5), scale=scale,
-                  lty=2, alpha.val=1)
-}
-
-## CNV Discordant Plots
-pdf("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/dotplots_1.pdf", width=30, height =4.5)
-split.screen(c(1, (length(S.dAAC.all) + 1)))
-ids.x <- rev(c("SR", "PSN1", "NCI-H2052"))
-
-for(drug.id in c("EXPR", names(S.dAAC.all))){
-    screen(grep(drug.id, c("EXPR", names(S.dAAC.all))))
-    suppressWarnings(plotBF(ids.x, drug.id))
-}
-close.screen(all.screens=TRUE)
-dev.off()
-
-
-## CNV Ambiguous Plots
-pdf("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/dotplots_2.pdf", width=30, height =4.5)
-split.screen(c(1, (length(S.dAAC.all) + 1)))
-ids.x <- rev(c("MOLP-8", "NALM-6", "KYSE-510"))
-
-for(drug.id in c("EXPR", names(S.dAAC.all))){
-    # KDE plots only
-    screen(grep(drug.id, c("EXPR", names(S.dAAC.all))))
-    
-    suppressWarnings(plotBF(ids.x, drug.id))
-}
-close.screen(all.screens=TRUE)
-dev.off()
-
-## CNV Concordant Plots
-pdf("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/dotplots_3.pdf", width=30, height =4.5)
-split.screen(c(1, (length(S.dAAC.all) + 1)))
-ids.x <- rev(c("NUGC-3", "SW620", "KARPAS-620"))
-
-for(drug.id in c("EXPR", names(S.dAAC.all))){
-    # KDE plots only
-    screen(grep(drug.id, c("EXPR", names(S.dAAC.all))))
-    
-    suppressWarnings(plotBF(ids.x, drug.id))
-}
-close.screen(all.screens=TRUE)
-dev.off()
-
-
-## Dotplot legend
-pdf("~/Desktop/bhk_lab/results/GNE/gCSI_CCLE/dotplots_legend.pdf", width=30, height =4.5)
-split.screen(c(1, (length(S.dAAC.all) + 1)))
-screen(1)
-plot(0, type='n', xlim=c(1, 6), ylim=c(0,2), axes=FALSE, ylab="", xlab="")
-points(x = seq(1, 5), y=rep(1, 5), pch=16, 
-       cex=(c(rep(2, 2), seq(2,5)) * 1.4))
-axis(side = 1, at=c(2:5), labels = c("<=2", 3,4, ">=5"))
-close.screen(all.screens=TRUE)
-dev.off()
-
-
-
 

@@ -2,4 +2,4 @@ phenotype_analysis/**/*Rdata
 phenotype_analysis/**/*annot.csv
 phenotype_analysis/processDrugPheno.R
 *.zip
-*/**/src/
+

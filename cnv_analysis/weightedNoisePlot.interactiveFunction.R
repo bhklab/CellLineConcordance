@@ -58,7 +58,11 @@ option_list = list(
   make_option(c("-f", "--functions"), type="character",
               default='~/git/CellLineConcordance/cnv_analysis/src',
               help="Source directory containing all functions used [default=%default]",
-              metavar="character")
+              metavar="character"),
+  make_option(c("-v", "--vmem"), type="character",
+              default=TRUE,
+              help="Uses a local bigmemory object for vmem [default=%default]",
+              metavar="logical")
 )
 opt_parser = OptionParser(usage = "Rscript %prog [options]", option_list=option_list)
 opt=parse_args(opt_parser)
@@ -91,7 +95,7 @@ id.mapping <- opt$annoref
 alt.seg.dir <- opt$altcnvdir
 
 load(file.path(cyto.dir, cyto.file))  # "cytoband.df", "raw.cytoband.df", "chr.df"  
-load(file.path(snp.dir, snp.matrix.file))  # "y.df", "low.match.list", "cell.line.anno", "matrix.perc.match"
+load(file.path(snp.matrix.dir, snp.matrix.file))  # "y.df", "low.match.list", "cell.line.anno", "matrix.perc.match"
 load(file.path(anno.dir,anno.file))
 
 
@@ -138,12 +142,31 @@ stdev.list.a12 <- lapply(names(stdev.list.a1), function(x) {
 })
 names(stdev.list.a12) <- names(stdev.list.a1)
 
-hscra1.list <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscra1', 'mem.cnProfile')
-hscr.mat.a1 <- hscra1.list[['hscr']]
-ord.df <- hscra1.list[['ord.df']]
-hscr.mat.a2 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscra2', 'mem.cnProfile')
-hscr.mat.a12 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscr_a12','cnProfile')
-stdev.mat.a12 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscr_a12','StdDev')
+if(opt$vmem){
+  print("Loading matrices into vmem")
+  hscra1.list <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscra1', 'mem.cnProfile')
+  hscr.mat.a1 <- hscra1.list[['hscr']]
+  ord.df <- hscra1.list[['ord.df']]
+  hscr.mat.a2 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscra2', 'mem.cnProfile')
+  hscr.mat.a12 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscr_a12','cnProfile')
+  stdev.mat.a12 <- loadHscrMat(file.path(ccl.cnv.datadir, seg.dir), 'hscr_a12','StdDev')
+} else {
+  print("Loading matrices into memory")
+  # saveMatrix <- function(bm.mat, path, file.id){
+  #   hscr.mat <- round(as.matrix(hscr.mat.a1),2)
+  #   save(hscr.mat, file=file.path(path, file.id))
+  # }
+  # saveMatrix(hscr.mat.a1, file.path(ccl.cnv.datadir, seg.dir, "round"), "hscra1.mem.cnProfile.Rdata")
+  # saveMatrix(hscr.mat.a2, file.path(ccl.cnv.datadir, seg.dir, "round"), "hscra2.mem.cnProfile.Rdata")
+  # saveMatrix(hscr.mat.a12, file.path(ccl.cnv.datadir, seg.dir, "round"), "hscra12.mem.cnProfile.Rdata")
+  # save(ord.df, file=file.path(ccl.cnv.datadir, seg.dir, "round", "ord.df.Rdata"))
+  
+  load(file.path(ccl.cnv.datadir, seg.dir, "hscra1.mem.cnProfile.Rdata"))
+  load(file.path(ccl.cnv.datadir, seg.dir, "hscra2.mem.cnProfile.Rdata"))
+  load(file.path(ccl.cnv.datadir, seg.dir, "hscra12.mem.cnProfile.Rdata"))
+  load(file.path(ccl.cnv.datadir, seg.dir, "ord.df.Rdata"))
+  stdev.mat.a12 <- do.call("cbind", stdev.list.a12)
+}
 
 
 ###############################
@@ -154,10 +177,18 @@ setwd(out.dir)
 if(!is.null(alt.seg.dir)){
   id.mapping <- read.table(id.mapping, header=TRUE, sep=",", stringsAsFactors = FALSE, check.names = FALSE)
   
-  x.hscr.mat.a2 <- loadHscrMat(alt.seg.dir, hscr="nAraw", profile.id="cnProfile", id.mapping)
-  x.hscr.mat.a1 <- loadHscrMat(alt.seg.dir, hscr="nBraw", profile.id="cnProfile", id.mapping)
-  x.hscr.mat.a12 <- loadHscrMat(alt.seg.dir, hscr="copyratio", profile.id="cnProfile", id.mapping)
-  
+  if(opt$vmem){
+    x.hscr.mat.a2 <- loadHscrMat(alt.seg.dir, hscr="nAraw", profile.id="cnProfile", id.mapping)
+    x.hscr.mat.a1 <- loadHscrMat(alt.seg.dir, hscr="nBraw", profile.id="cnProfile", id.mapping)
+    x.hscr.mat.a12 <- loadHscrMat(alt.seg.dir, hscr="copyratio", profile.id="cnProfile", id.mapping)
+  } else {
+    # saveMatrix(x.hscr.mat.a1, alt.seg.dir, "nAraw.cnProfile.Rdata")
+    # saveMatrix(x.hscr.mat.a2, alt.seg.dir, "nBraw.cnProfile.Rdata")
+    # saveMatrix(x.hscr.mat.a12, alt.seg.dir, "nABraw.cnProfile.Rdata")
+    load(file.path(alt.seg.dir, "nAraw.cnProfile.Rdata"))
+    load(file.path(alt.seg.dir, "nBraw.cnProfile.Rdata"))
+    load(file.path(alt.seg.dir, "nABraw.cnProfile.Rdata"))
+  }
   list.x <- list(list("i"='PSN1', "c1"='CCLE',
                       "j"='PSN1', "c2"='GNE'),
                  list("i"='NCI-H2052', "c1"='CCLE',

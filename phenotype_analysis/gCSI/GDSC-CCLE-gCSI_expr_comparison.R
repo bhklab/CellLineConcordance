@@ -8,6 +8,7 @@ refdir <- '~/git/reference/l1000'
 outdir <- '/results/pharmaco'  #codeocean
 refdir <- '/data/ref'  #codeocean
 
+dir.create(outdir, recursive=TRUE)
 load(file.path(refdir, "l1000.Rdata"))
 
 #### FUNCTIONS ####
@@ -132,7 +133,7 @@ summarizeCorr <- function(corr){
 #### MAIN ####
 #### Obtain PharmacoGx Data ####
 #Download PSets
-availablePSets()
+#availablePSets()
 GDSC1000 <- downloadPSet("GDSC1000")
 gCSI <- downloadPSet("gCSI")
 CCLE <-downloadPSet("CCLE")

@@ -48,8 +48,7 @@ setwd(global.wd)
 load(file.path(global.curation.dir, out.rdata))
 
 ###############################
-#         Functions
-###############################
+####      Functions      ####
 {
 rmNaRows <- function(x){
   na.rows <- which(apply(x, 1, function(y) all(is.na(y))))
@@ -349,8 +348,7 @@ getCellids <- function(x){
 }
 
 ###############################
-#           Main
-###############################
+####      Main           ####
 #Load and reformat/rename the files
 # cell.line.anno$gdsc.filename.x <- gsub(".cel$", ".CEL", cell.line.anno$gdsc.filename.x)
 # cell.line.anno$gdsc.filename.y <- gsub(".cel$", ".CEL", cell.line.anno$gdsc.filename.y)

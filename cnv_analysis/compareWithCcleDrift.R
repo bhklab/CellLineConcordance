@@ -101,6 +101,37 @@ cnv.corr <- as.data.frame(t(cnv.corr))
 colnames(cnv.corr) <- c("A1", "A2")
 ccle2 <- cbind(ccle2, cnv.corr)
 
+
+#########################
+#### Estimate counts ####
+# Number of cell lines not assayed using SNP6
+table(apply(ccle2, 1, function(x) all(is.na(c(x['mapped.ccle'], x['mapped.gdsc']))))) # 11 TRUE
+
+# Number of cell lines not assayed in both datasets
+table(apply(ccle2, 1, function(x) any(is.na(c(x['mapped.ccle'], x['mapped.gdsc']))))) # 24 TRUE
+
+# Number of cell lines with viable karyotypes in both datasets
+table(apply(ccle2, 1, function(x) any(is.na(c(x['A1'], x['A2']))))) # 129 TRUE; 524 FALSE
+
+# Number of cell lines with high somatic (>0.75) and low karyotype (<0.8)
+table(apply(ccle2, 1, function(x){
+  any(c(x['A1'] < 0.8 & x['r_somatic_CCLE_HC_vs_GDSC_WES'] > 0.75,
+        x['A2'] < 0.8 & x['r_somatic_CCLE_HC_vs_GDSC_WES'] > 0.75))
+}))
+
+
+
+snu <- c('SNU1', 'SNU16', 'SNU5')
+idx <- unlist(sapply(snu, grep, cell.line.anno$unique.cellid))
+cell.line.anno[which(cell.line.anno$unique.cellid == c('SNU1', 'SNU16', 'SNU5')),]
+
+# Number of cell lines not found in both datasets
+table(apply(ccle2, 1, function(x) any(is.na(c(x['mapped.ccle'], x['mapped.gdsc']))))) # 24 TRUE
+table(apply(ccle2, 1, function(x) all(is.na(c(x['mapped.ccle'], x['mapped.gdsc']))))) # 24 TRUE
+which(apply(ccle2, 1, function(x) all(is.na(c(x['mapped.ccle'], x['mapped.gdsc'])))))
+# Number of cell lines missing A1 or A2
+table(apply(ccle2, 1, function(x) any(is.na(c(x['A1'], x['A2']))))) # 129 TRUE
+
 ##################################
 #### Plot based on categories ####
 ccle.spl <- split(ccle2, f=ccle2$comments)

@@ -35,8 +35,6 @@ cl.exprs <- read.table(file.path(summ.dir, "gCSI.seg"),
                        stringsAsFactors = FALSE, check.names=FALSE)
 cl.ids <- split(cl.exprs, f=cl.exprs$ID)
 hg19.genes <- getGenes()
-mart <- useMart("ENSEMBL_MART_ENSEMBL")
-mart <- useDataset("hsapiens_gene_ensembl", mart)
 
 ## Annotate the CN segments
 anno.ids <- lapply(cl.ids, function(cl.i){

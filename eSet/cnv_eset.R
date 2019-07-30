@@ -21,6 +21,59 @@ getMapping <- function(in.col='ENTREZID',
   gene.map
 }
 
+genWindowedBed <- function(bin.size=1000000, seq.style="UCSC"){
+  chrs <- org.Hs.egCHRLENGTHS[c(1:22,"X", "Y")]
+  
+  ## Construct intervals across the genome of a certain bin size
+  start.points <- seq(1, 500000000, by=bin.size)
+  grl <- lapply(names(chrs), function(chr.id){
+    chr <- chrs[chr.id]
+    ir <- IRanges(start=start.points[start.points < chr], width=bin.size)
+    end(ir[length(ir),]) <- chr
+    gr <- GRanges(seqnames = chr.id, ir)
+    gr
+  })
+  
+  ## Assemble all GRanges and set seq level style
+  grl <- as(grl, "GRangesList")
+  suppressWarnings(seqlevelsStyle(grl) <- seq.style)
+  gr <- unlist(grl)
+  gr
+}
+
+segmentCNVs <- function(cnv, bed){
+  olaps = findOverlaps(cnv, bed)
+  
+  # Flag BED bins that map to multiple CNVs
+  dup.idx <- which(duplicated(subjectHits(olaps), fromLast=TRUE))
+  dup.idx <- c(dup.idx, which(duplicated(subjectHits(olaps), fromLast=FALSE)))
+  dup.idx <- sort(dup.idx)
+  
+  # Use a summary metric (Default=mean) to reduce the CNV information that
+  # spans multiple bed windows
+  dup.df <- as.data.frame(olaps[dup.idx,])
+  dup.spl <- split(dup.df, dup.df$subjectHits)
+  dup.em <- lapply(dup.spl, function(i) {
+    colMeans(as.matrix(elementMetadata(cnv[i$queryHits,])))
+  })
+  dup.em <- do.call(rbind, dup.em)
+  
+  # Initialize a metadata matrix and populate it for the BED GRanges object
+  em  <- matrix(nrow=length(bed), 
+                ncol=ncol(elementMetadata(cnv)), 
+                dimnames = list(NULL,colnames(elementMetadata(cnv))))
+  dedup.olaps <- olaps[-dup.idx,]
+  em[subjectHits(dedup.olaps),] <- as.matrix(elementMetadata(cnv)[queryHits(dedup.olaps),])
+  em[subjectHits(olaps)[dup.idx],] <- dup.em 
+  
+  # Append metadata and return
+  em <- as.data.frame(em)
+  em$ID <- paste0("bin_", c(1:nrow(em)))
+  bed$ID <- paste0("bin_", c(1:nrow(em)))
+  
+  return(list(seg=bed, genes=em))
+}
+
 annotateCnvs <- function(cnv, txdb, anno=NULL,
                          cols=c("seg.mean", "nA", "nB")){
   stopifnot(is(cnv, "GRanges"), is(txdb, "TxDb"))
@@ -54,17 +107,18 @@ annotateCnvs <- function(cnv, txdb, anno=NULL,
   list("seg"=cnv, "genes"=seg.anno)  
 }
 
-reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL'){
+reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL', ord=FALSE,
+                           keys=c("ENTREZ", "SYMBOL", "ENSEMBL")){
   lapply(cols, function(each.col, features){
     print(each.col)
-    keys <- c("ENTREZ", "SYMBOL", "ENSEMBL")
     m <- suppressWarnings(Reduce(f=function(x,y) merge(x,y,by=keys),
                                  lapply(gene.lrr, function(i) i[['genes']][,c(keys, each.col)])))
+    if(ord) m <- m[match(gene.lrr[[1]][['genes']][,keys], m[,keys]),]
     if(any(duplicated(m[,features]))) m <- m[-which(duplicated(m[,features])),]
     if(any(is.na(m[,features]))) m <- m[-which(is.na(m[,features])),]
     rownames(m) <- m[,features]
-    m <- m[,-c(1:3)]
-    colnames(m) <- names(cnseg.list) 
+    m <- m[,-c(1:length(keys))]
+    colnames(m) <- names(gene.lrr) 
     as.matrix(m)
   }, features=features)
 }
@@ -72,6 +126,7 @@ reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL'){
 ##############
 #### Main ####
 #handle <- 'CCLE'
+map.to <- 'bin' #bin, gene, tad
 switch(handle,
        'UHN'={
          anno.name <- 'UHN'
@@ -111,8 +166,10 @@ if(handle=='gCSI'){
 }
 
 ## Annotate the CN segments
+if(map.to == 'bin') windowed.bed <- genWindowedBed(bin.size=5000)
+
 cnseg.list <- split(seg, f=seg[,seg.ids[1]])
-gene.lrr <- lapply(cnseg.list, function(cl.i){
+gene.lrr <- lapply(cnseg.list[1:2], function(cl.i){
   uid = unique(cl.i[,seg.ids[1]])
   print(paste0(uid, " - (", 
                grep(uid, names(cnseg.list)), "/", 
@@ -125,14 +182,29 @@ gene.lrr <- lapply(cnseg.list, function(cl.i){
   mcols(cnv) <- round(cl.i[,cols], 3)
   suppressWarnings(seqlevelsStyle(cnv) <- 'UCSC')
   
-  cl.anno <- suppressMessages(annotateCnvs(cnv, txdb, 
-                                           anno=txdb.genes,
-                                           cols=cols))
-  names(cl.anno) <- c('seg', 'genes')
+  if(map.to=='bin'){
+    # Map CNV segments to a reference bed
+    cl.anno <- segmentCNVs(cnv, windowed.bed)
+  } else if(map.to == 'genes'){
+    # Map CNV segments to genes
+    cl.anno <- suppressMessages(annotateCnvs(cnv, txdb, 
+                                             anno=txdb.genes,
+                                             cols=cols))
+    names(cl.anno) <- c('seg', 'genes')
+  }
   cl.anno
 })
 
-mats <- reduceEsetMats(gene.lrr, cols, features='SYMBOL')
+mats <- switch(map.to,
+               "bin"={
+                 reduceEsetMats(gene.lrr, cols, features='ID', 
+                                keys='ID', ord=TRUE)
+               },
+               "gene"={
+                 reduceEsetMats(gene.lrr, cols, features='SYMBOL')
+               })
+
+
 save(mats, file=file.path('esets', "raw_mats", paste0(anno.name, '.Rdata')))
 
 

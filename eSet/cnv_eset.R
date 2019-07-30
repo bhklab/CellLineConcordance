@@ -168,10 +168,11 @@ if(handle=='gCSI'){
 }
 
 ## Annotate the CN segments
-if(map.to == 'bin') windowed.bed <- genWindowedBed(bin.size=5000)
+bin.size <- 50000
+if(map.to == 'bin') windowed.bed <- genWindowedBed(bin.size=bin.size)
 
 cnseg.list <- split(seg, f=seg[,seg.ids[1]])
-gene.lrr <- mclapply(cnseg.list[1:5], function(cl.i){
+gene.lrr <- mclapply(cnseg.list, function(cl.i){
   uid = unique(cl.i[,seg.ids[1]])
   print(paste0(uid, " - (", 
                grep(uid, names(cnseg.list)), "/", 
@@ -195,7 +196,7 @@ gene.lrr <- mclapply(cnseg.list[1:5], function(cl.i){
     names(cl.anno) <- c('seg', 'genes')
   }
   cl.anno
-})
+}, mc.cores=4)
 
 mats <- switch(map.to,
                "bin"={
@@ -206,9 +207,8 @@ mats <- switch(map.to,
                  reduceEsetMats(gene.lrr, cols, features='SYMBOL')
                })
 
-example.seg <- gene.lrr[[1]][['seg']]
-save(mats, example.seg, 
-     file=file.path('esets', "raw_mats", paste0(anno.name, ".", map.to, '.Rdata')))
+save(mats,  file=file.path('esets', "raw_mats", 
+                           paste0(anno.name, ".", map.to, ".", bin.size, '.Rdata')))
 
 ## Format the phenoData
 if(handle == 'gCSI'){
@@ -268,11 +268,25 @@ if(handle != 'UHN'){
 }
 
 
-
+## Assemble featureData()
+if(map.to == 'bin'){
+  fdata <- AnnotatedDataFrame(data=as.data.frame(gene.lrr[[1]][['seg']]),
+                              varMetadata=data.frame(labelDescription=c(
+                                "Chromosome", "Bin start", "Bin end", 
+                                "Bin width", "Strand", "Unique bin ID")))
+  rownames(fdata) <- rownames(eset.env$exprs)
+} else if(map.to == 'gene'){
+  fdata <- AnnotatedDataFrame(data=as.data.frame(matrix(nrow=nrow(eset.env$exprs),ncol=0)),
+                              varMetadata=data.frame(labelDescription=c()))
+  rownames(fdata) <- rownames(eset.env$exprs)
+}
 
 ## Assemble the eset
 cl.phenoData <- new("AnnotatedDataFrame", data=meta)
 cl.eset <- ExpressionSet(assayData=eset.env,
                          phenoData=cl.phenoData,
-                         annotation=anno.name)
-save(cl.eset, file=file.path("esets", paste0(anno.name, "_eset.Rdata")))
+                         annotation=anno.name,
+                         featureData=fdata)
+save(cl.eset, file=file.path("esets", paste0(anno.name, "_", map.to, "_eset.Rdata")))
+
+file.path(getwd(), "esets", paste0(anno.name, "_", map.to, "_eset.Rdata"))

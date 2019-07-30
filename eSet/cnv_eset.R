@@ -1,5 +1,6 @@
 library("Biobase")
 library(org.Hs.eg.db)
+library(parallel)
 library(TxDb.Hsapiens.UCSC.hg19.knownGene)
 
 ###################
@@ -64,12 +65,11 @@ segmentCNVs <- function(cnv, bed){
                 dimnames = list(NULL,colnames(elementMetadata(cnv))))
   dedup.olaps <- olaps[-dup.idx,]
   em[subjectHits(dedup.olaps),] <- as.matrix(elementMetadata(cnv)[queryHits(dedup.olaps),])
-  em[subjectHits(olaps)[dup.idx],] <- dup.em 
+  em[unique(subjectHits(olaps)[dup.idx]),] <- dup.em 
   
   # Append metadata and return
   em <- as.data.frame(em)
-  em$ID <- paste0("bin_", c(1:nrow(em)))
-  bed$ID <- paste0("bin_", c(1:nrow(em)))
+  bed$ID <- em$ID <- paste0("bin_", c(1:nrow(em)))
   
   return(list(seg=bed, genes=em))
 }
@@ -125,8 +125,10 @@ reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL', ord=FALSE,
 
 ##############
 #### Main ####
-#handle <- 'CCLE'
+handle <- 'gCSI'
 map.to <- 'bin' #bin, gene, tad
+## To add: PGA/wGII PSet (different thresholds)
+
 switch(handle,
        'UHN'={
          anno.name <- 'UHN'
@@ -169,7 +171,7 @@ if(handle=='gCSI'){
 if(map.to == 'bin') windowed.bed <- genWindowedBed(bin.size=5000)
 
 cnseg.list <- split(seg, f=seg[,seg.ids[1]])
-gene.lrr <- lapply(cnseg.list[1:2], function(cl.i){
+gene.lrr <- mclapply(cnseg.list[1:5], function(cl.i){
   uid = unique(cl.i[,seg.ids[1]])
   print(paste0(uid, " - (", 
                grep(uid, names(cnseg.list)), "/", 
@@ -204,9 +206,9 @@ mats <- switch(map.to,
                  reduceEsetMats(gene.lrr, cols, features='SYMBOL')
                })
 
-
-save(mats, file=file.path('esets', "raw_mats", paste0(anno.name, '.Rdata')))
-
+example.seg <- gene.lrr[[1]][['seg']]
+save(mats, example.seg, 
+     file=file.path('esets', "raw_mats", paste0(anno.name, ".", map.to, '.Rdata')))
 
 ## Format the phenoData
 if(handle == 'gCSI'){

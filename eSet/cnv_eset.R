@@ -109,7 +109,7 @@ annotateCnvs <- function(cnv, txdb, anno=NULL,
 
 reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL', ord=FALSE,
                            keys=c("ENTREZ", "SYMBOL", "ENSEMBL")){
-  lapply(cols, function(each.col, features){
+  mt <- lapply(cols, function(each.col, features){
     print(each.col)
     m <- suppressWarnings(Reduce(f=function(x,y) merge(x,y,by=keys),
                                  lapply(gene.lrr, function(i) i[['genes']][,c(keys, each.col)])))
@@ -121,6 +121,8 @@ reduceEsetMats <- function(gene.lrr, cols, features='SYMBOL', ord=FALSE,
     colnames(m) <- names(gene.lrr) 
     as.matrix(m)
   }, features=features)
+  if(length(mt) == 5) mt[[6]] <- mt[[5]] + mt[[4]]
+  mt
 }
 
 ##############
@@ -265,6 +267,7 @@ assign("B", mats[[3]], envir=eset.env)
 if(handle != 'UHN'){
   assign("modalA", mats[[4]], envir=eset.env)
   assign("modalB", mats[[5]], envir=eset.env)
+  assign("modalAB", mats[[6]], envir=eset.env)
 }
 
 
@@ -289,4 +292,4 @@ cl.eset <- ExpressionSet(assayData=eset.env,
                          featureData=fdata)
 save(cl.eset, file=file.path("esets", paste0(anno.name, "_", map.to, "_eset.Rdata")))
 
-file.path(getwd(), "esets", paste0(anno.name, "_", map.to, "_eset.Rdata"))
+#file.path(getwd(), "esets", paste0(anno.name, "_", map.to, "_eset.Rdata"))
